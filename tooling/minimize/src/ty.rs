@@ -135,6 +135,18 @@ impl<'tcx> Ctxt<'tcx> {
 
                 if ty_is_freeze { Vec::new() } else { vec![(Size::ZERO, size)] }
             }
+            rs::TyKind::Closure(..) => {
+                let layout = self.rs_layout_of(ty);
+                (0..layout.fields.count())
+                    .flat_map(|i| {
+                        let offset = translate_size(layout.fields.offset(i));
+                        let t = layout.field(self, i).ty;
+                        self.cells_in_sized_ty(t, span)
+                            .into_iter()
+                            .map(move |(start, len)| (start + offset, len))
+                    })
+                    .collect()
+            }
             rs::TyKind::Array(elem_ty, c) => {
                 let range = self.cells_in_sized_ty(*elem_ty, span);
                 if !range.is_empty() {
@@ -237,7 +249,9 @@ impl<'tcx> Ctxt<'tcx> {
                 let fields = (0..layout.fields.count())
                     .map(|i| {
                         let t = layout.field(self, i).ty;
+                        let t = self.translate_ty(t, span);
                         let offset = layout.fields.offset(i);
+                        let offset = translate_size(offset);
                         (offset, t)
                     })
                     .collect::<Vec<_>>();

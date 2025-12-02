@@ -130,6 +130,24 @@ impl<'tcx> Ctxt<'tcx> {
     }
 }
 
+impl<'tcx> rustc_abi::HasDataLayout for Ctxt<'tcx> {
+    fn data_layout(&self) -> &rustc_abi::TargetDataLayout {
+        &self.tcx.data_layout()
+    }
+}
+
+impl<'tcx> rustc_middle::ty::layout::HasTyCtxt<'tcx> for Ctxt<'tcx> {
+    fn tcx(&self) -> rs::TyCtxt<'tcx> {
+        self.tcx
+    }
+}
+
+impl<'tcx> rustc_middle::ty::layout::HasTypingEnv<'tcx> for Ctxt<'tcx> {
+    fn typing_env(&self) -> rs::TypingEnv<'tcx> {
+        self.typing_env()
+    }
+}
+
 fn mk_start_fn(entry: u32) -> Function {
     let b0_name = BbName(Name::from_internal(0));
     let b1_name = BbName(Name::from_internal(1));
