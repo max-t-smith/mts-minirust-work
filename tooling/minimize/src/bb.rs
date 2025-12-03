@@ -777,6 +777,48 @@ impl<'cx, 'tcx> FnCtxt<'cx, 'tcx> {
                 })
                 .collect();
 
+            if rs_args.len() > 1 {
+                let first_arg_ty = rs_args[0].node.ty(&self.body, self.tcx);
+                let deref_ty = first_arg_ty.peel_refs();
+
+                // If we have a closure, we need to unpack the second (and only other) argument, which should be a tuple
+                if matches!(deref_ty.kind(), rs::TyKind::Closure(..)) {
+                    let tuple_arg_span = &rs_args[1];
+
+                    if rs_args.len() > 2 {
+                        panic!("More than two args in closure call");
+                    }
+
+                    match &tuple_arg_span.node {
+                        rs::Operand::Move(tuple_place) | rs::Operand::Copy(tuple_place) => {
+                            let tuple_ty = tuple_arg_span.node.ty(&self.body, self.tcx);
+
+                            if let rs::TyKind::Tuple(tuple_tys) = tuple_ty.kind() {
+                                let mut new_args = vec![args.get(Int::from(0)).unwrap()];
+
+                                for (i, ty) in tuple_tys.iter().enumerate() {
+                                    let field_place = tuple_place.project_deeper(
+                                        &[rs::PlaceElem::Field(rs::FieldIdx::from_usize(i), ty)],
+                                        self.tcx,
+                                    );
+                                    new_args.push(ArgumentExpr::InPlace(
+                                        self.translate_place(&field_place, tuple_arg_span.span),
+                                    ));
+                                }
+
+                                args = new_args.into_iter().collect();
+                            } else {
+                                panic!(
+                                    "Expected tuple argument for closure call, got: {:?}",
+                                    tuple_ty.kind()
+                                );
+                            }
+                        }
+                        _ => panic!(),
+                    }
+                }
+            }
+
             let unwind_block = Some(self.translate_unwind_action(unwind, bb));
 
             // Distinguish direct function calls or dynamic dispatch on a trait object.
